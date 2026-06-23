@@ -1,57 +1,33 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
+const isWhatsAppEnabled = process.env.ENABLE_WHATSAPP === 'true';
 
+let client = null;
 let lastQR = null;
+let isReady = false;
 
-// Initialize the WhatsApp client with LocalAuth to persist session credentials
-const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: {
-    headless: true,
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || 
-      '/opt/render/.cache/puppeteer/chrome/linux-146.0.7680.31/chrome-linux64/chrome',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--single-process',
-      '--disable-gpu'
-    ]
-  }
-});
+if (isWhatsAppEnabled) {
+  const { Client, LocalAuth } = require('whatsapp-web.js');
+  const qrcode = require('qrcode');
 
-// Track ready status dynamically on the client instance
-client.isReady = false;
+  client = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--disable-gpu']
+    }
+  });
 
-client.on('qr', async (qr) => {
-  try {
+  client.on('qr', async (qr) => {
     lastQR = await qrcode.toDataURL(qr);
-    client.isReady = false;
-    console.log('New QR generated — open /whatsapp-setup to scan');
-  } catch (err) {
-    console.error('Failed to generate QR data URL:', err);
-  }
-});
+    isReady = false;
+  });
 
-client.on('ready', () => {
-  client.isReady = true;
-  lastQR = null;
-  console.log('✅ WhatsApp client is ready');
-});
+  client.on('ready', () => {
+    isReady = true;
+    lastQR = null;
+    console.log('✅ WhatsApp ready');
+  });
 
-client.on('auth_failure', () => {
-  client.isReady = false;
-  console.log('❌ WhatsApp auth failed');
-});
+  client.initialize();
+}
 
-client.on('disconnected', (reason) => {
-  client.isReady = false;
-  console.log('❌ WhatsApp client disconnected:', reason);
-});
-
-client.initialize();
-
-module.exports = { client, getQR: () => lastQR, isReady: () => client.isReady };
+module.exports = { client, getQR: () => lastQR, isReady: () => isReady };
